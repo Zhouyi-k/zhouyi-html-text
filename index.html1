@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>粤剧AI对话</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Microsoft Yahei", sans-serif; }
+        body { background: #f8f5f0; }
+        .container {
+            width: 900px;
+            margin: 40px auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+        }
+        .avatar-side {
+            width: 350px;
+            background: linear-gradient(180deg, #f9e8d9 0%, #f1d4b9 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 30px;
+        }
+        .avatar {
+            width: 280px;
+            height: 380px;
+            border-radius: 15px;
+            overflow: hidden;
+            border: 4px solid #d4a373;
+        }
+        .avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .name {
+            margin-top: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #8b4513;
+        }
+        .title {
+            font-size: 14px;
+            color: #a67c52;
+            margin-top: 5px;
+        }
+        /* 新增：语音控制按钮样式 */
+        .voice-control {
+            margin-top: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .voice-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            background: #d4a373;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+        .voice-btn:hover {
+            background: #b88646;
+        }
+        .voice-status {
+            font-size: 12px;
+            color: #8b4513;
+        }
+        .chat-side {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 30px;
+        }
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            padding-right: 10px;
+            min-height: 400px;
+        }
+        .msg {
+            max-width: 70%;
+            margin: 10px 0;
+            padding: 12px 18px;
+            border-radius: 20px;
+            line-height: 1.5;
+        }
+        .user-msg {
+            background: #d4a373;
+            color: white;
+            margin-left: auto;
+        }
+        .ai-msg {
+            background: #f1d4b9;
+            color: #5a3e2b;
+            position: relative;
+        }
+        /* 语音播放标识 */
+        .ai-msg .play-icon {
+            position: absolute;
+            left: -25px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            color: #d4a373;
+            cursor: pointer;
+        }
+        .input-area {
+            display: flex;
+            gap: 10px;
+        }
+        #user-input {
+            flex: 1;
+            padding: 15px 20px;
+            border: 2px solid #f1d4b9;
+            border-radius: 30px;
+            outline: none;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        #user-input:focus {
+            border-color: #d4a373;
+        }
+        #send-btn {
+            padding: 15px 30px;
+            background: #d4a373;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        #send-btn:hover {
+            background: #b88646;
+        }
+        .loading {
+            color: #a67c52;
+            font-style: italic;
+            text-align: left;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="avatar-side">
+            <div class="avatar">
+                <img src="yueju.png" alt="粤剧数字人">
+            </div>
+            <div class="name">粤剧小师妹</div>
+            <div class="title">带你领略传统戏曲之美</div>
+            <!-- 新增：语音控制按钮 -->
+            <div class="voice-control">
+                <button class="voice-btn" id="pauseVoiceBtn">⏸</button>
+                <span class="voice-status" id="voiceStatus">语音已就绪</span>
+            </div>
+        </div>
+        <div class="chat-side">
+            <div class="messages" id="messages"></div>
+            <div class="input-area">
+                <input type="text" id="user-input" placeholder="输入问题，和粤剧小师妹聊天吧...">
+                <button id="send-btn">发送</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const messagesEl = document.getElementById('messages');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const pauseVoiceBtn = document.getElementById('pauseVoiceBtn');
+        const voiceStatus = document.getElementById('voiceStatus');
+        
+        // 语音合成核心对象
+        let speechSynthesis = window.speechSynthesis;
+        let currentUtterance = null;
+        let isPaused = false;
+
+        // 粤剧专属知识库
+        const yueOperaKnowledge = {
+            角色: {
+                通用: "粤剧的角色行当分为「生、旦、净、末、丑」五大类，每个行当又细分多个小类，比如生行有小武、文生、武生，旦行有正旦、花旦、刀马旦等～",
+                生: "「生」是粤剧里的男性角色统称，小武多演年轻勇武的男性，文生演温文尔雅的文人，武生则侧重武打戏份，比如《罗成写书》里的罗成就是小武哦～",
+                旦: "「旦」是女性角色，花旦演活泼俏皮的年轻女子，正旦（青衣）演端庄稳重的中年女性，刀马旦则是能文能武的巾帼英雄，比如穆桂英～",
+                净: "「净」又称花脸，多演性格刚烈、相貌奇特的男性角色，比如张飞、包拯，化妆会勾大花脸，唱腔粗犷有力～",
+                丑: "「丑」是喜剧角色，分文丑和武丑，文丑演市井小人物，幽默风趣；武丑则擅长轻功、武打，比如《时迁偷鸡》里的时迁～"
+            },
+            服饰: {
+                通用: "粤剧服饰叫「行头」，讲究「宁穿破，不穿错」！不同行当、角色、身份的服饰有严格规矩，颜色、纹样、款式都能体现人物身份～",
+                行头: "粤剧行头分「文行头」和「武行头」，文行头是文官、文人的服饰，比如官袍、褶子；武行头是武将的战衣，比如靠、铠，还有盔头（帽子）搭配～",
+                颜色: "粤剧服饰颜色有讲究：黄色代表皇家，红色代表喜庆、忠勇，黑色代表刚直，白色代表儒雅，绿色代表侠义，比如关公一定穿绿袍哦～",
+                纹样: "纹样也有寓意：龙纹是皇家专属，凤纹代表女性尊贵，牡丹纹象征富贵，祥云纹寓意吉祥，普通百姓的服饰则多是素色无纹～"
+            },
+            唱腔: {
+                通用: "粤剧唱腔以「梆子」和「二黄」为基础，统称「梆黄」，还有粤曲小调、南音、龙舟等特色唱腔，不同行当的唱腔音色也不同～",
+                梆子: "梆子腔节奏明快、高亢激昂，多用来表现情绪激动的场景，比如武将出征、人物发怒时会用～",
+                二黄: "二黄腔节奏舒缓、旋律优美，多用来表现抒情、悲伤的情绪，比如文生、正旦的内心独白常用～"
+            },
+            历史: "粤剧起源于明清时期，融合了昆曲、戈阳腔、本地粤语小调，2009年被列入人类非物质文化遗产名录，是岭南文化的瑰宝～",
+            道具: "粤剧道具讲究「以小见大」，比如一把马鞭代表骑马，一支船桨代表行船，一桌二椅能变换出不同场景，全靠演员的表演来烘托～"
+        };
+
+        // 上下文记忆
+        let lastQuestionType = '';
+
+        // 添加消息（新增语音播放图标）
+        function addMessage(text, type) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `msg ${type}-msg`;
+            
+            // AI消息添加语音播放图标
+            if (type === 'ai') {
+                const playIcon = document.createElement('span');
+                playIcon.className = 'play-icon';
+                playIcon.innerHTML = '🔊';
+                playIcon.title = '重新播放';
+                // 点击图标重新朗读该条消息
+                playIcon.onclick = () => speakText(text);
+                msgDiv.appendChild(playIcon);
+                
+                const textSpan = document.createElement('span');
+                textSpan.textContent = text;
+                msgDiv.appendChild(textSpan);
+            } else {
+                msgDiv.textContent = text;
+            }
+            
+            messagesEl.appendChild(msgDiv);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        // 加载中提示
+        function addLoading() {
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'loading';
+            loadingDiv.textContent = '粤剧小师妹正在翻戏本～';
+            loadingDiv.id = 'loading';
+            messagesEl.appendChild(loadingDiv);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function removeLoading() {
+            const loadingDiv = document.getElementById('loading');
+            if (loadingDiv) loadingDiv.remove();
+        }
+
+        // 语音合成核心函数（定制小师妹音色）
+        function speakText(text) {
+            // 停止当前正在播放的语音
+            if (currentUtterance) {
+                speechSynthesis.cancel(currentUtterance);
+            }
+
+            // 创建语音实例
+            const utterance = new SpeechSynthesisUtterance(text);
+            
+            // 定制语音参数（贴合粤剧小师妹人设）
+            utterance.lang = 'zh-CN'; // 中文
+            utterance.volume = 1;     // 音量（0-1）
+            utterance.rate = 0.9;     // 语速（0.1-10，0.9偏慢更温柔）
+            utterance.pitch = 1.2;    // 音调（0-2，1.2偏女声）
+
+            // 语音状态监听
+            utterance.onstart = () => {
+                voiceStatus.textContent = '正在说话...';
+                pauseVoiceBtn.innerHTML = '⏸';
+                isPaused = false;
+            };
+
+            utterance.onend = () => {
+                voiceStatus.textContent = '语音已结束';
+                pauseVoiceBtn.innerHTML = '⏸';
+                currentUtterance = null;
+            };
+
+            utterance.onerror = (e) => {
+                voiceStatus.textContent = '语音播放失败';
+                console.error('语音错误:', e);
+            };
+
+            // 保存当前语音实例
+            currentUtterance = utterance;
+            
+            // 开始播放
+            speechSynthesis.speak(utterance);
+        }
+
+        // 暂停/继续语音播放
+        pauseVoiceBtn.onclick = () => {
+            if (!currentUtterance) return;
+
+            if (isPaused) {
+                speechSynthesis.resume();
+                pauseVoiceBtn.innerHTML = '⏸';
+                voiceStatus.textContent = '继续说话...';
+                isPaused = false;
+            } else {
+                speechSynthesis.pause();
+                pauseVoiceBtn.innerHTML = '▶';
+                voiceStatus.textContent = '已暂停说话';
+                isPaused = true;
+            }
+        };
+
+        // 智能匹配回答
+        function getSmartAnswer(question) {
+            const q = question.toLowerCase().replace(/吗|呢|吧|啊|？|！/g, '');
+            
+            if (q.includes('角色') || q.includes('生') || q.includes('旦') || q.includes('净') || q.includes('丑')) {
+                lastQuestionType = '角色';
+                if (q.includes('生')) return yueOperaKnowledge.角色.生;
+                if (q.includes('旦')) return yueOperaKnowledge.角色.旦;
+                if (q.includes('净')) return yueOperaKnowledge.角色.净;
+                if (q.includes('丑')) return yueOperaKnowledge.角色.丑;
+                return yueOperaKnowledge.角色.通用;
+            }
+
+            if (q.includes('服饰') || q.includes('行头') || q.includes('衣服') || q.includes('颜色') || q.includes('纹样')) {
+                lastQuestionType = '服饰';
+                if (q.includes('行头')) return yueOperaKnowledge.服饰.行头;
+                if (q.includes('颜色')) return yueOperaKnowledge.服饰.颜色;
+                if (q.includes('纹样')) return yueOperaKnowledge.服饰.纹样;
+                return yueOperaKnowledge.服饰.通用;
+            }
+
+            if (q.includes('唱腔') || q.includes('梆子') || q.includes('二黄') || q.includes('唱')) {
+                lastQuestionType = '唱腔';
+                if (q.includes('梆子')) return yueOperaKnowledge.唱腔.梆子;
+                if (q.includes('二黄')) return yueOperaKnowledge.唱腔.二黄;
+                return yueOperaKnowledge.唱腔.通用;
+            }
+
+            if (q.includes('历史') || q.includes('起源') || q.includes('非遗')) {
+                lastQuestionType = '历史';
+                return yueOperaKnowledge.历史;
+            }
+
+            if (q.includes('道具') || q.includes('马鞭') || q.includes('船桨')) {
+                lastQuestionType = '道具';
+                return yueOperaKnowledge.道具;
+            }
+
+            if (lastQuestionType && (q.includes('演什么') || q.includes('是什么') || q.includes('特点'))) {
+                if (lastQuestionType === '角色') return yueOperaKnowledge.角色.通用;
+                if (lastQuestionType === '服饰') return yueOperaKnowledge.服饰.通用;
+            }
+
+            return `小师妹暂时只精通粤剧相关知识哦😜！你可以问我：
+1. 粤剧有哪些角色？
+2. 粤剧的行头有什么讲究？
+3. 粤剧的唱腔分哪几种？
+4. 粤剧的历史由来？`;
+        }
+
+        // 发送消息核心函数（新增语音朗读）
+        async function sendMessage() {
+            const question = userInput.value.trim();
+            if (!question) return;
+
+            addMessage(question, 'user');
+            userInput.value = '';
+            addLoading();
+
+            setTimeout(() => {
+                removeLoading();
+                const answer = getSmartAnswer(question);
+                addMessage(answer, 'ai');
+                // 自动朗读回答内容
+                speakText(answer);
+            }, 1000);
+        }
+
+        // 绑定事件
+        sendBtn.addEventListener('click', sendMessage);
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        // 初始欢迎语+语音
+        window.onload = () => {
+            const welcomeText = '你好呀！我是粤剧小师妹，不管是角色、服饰、唱腔还是历史，只要是粤剧的问题，我都能解答～';
+            addMessage(welcomeText, 'ai');
+            // 页面加载完成后延迟1秒播放欢迎语
+            setTimeout(() => speakText(welcomeText), 1000);
+        };
+    </script>
+</body>
+</html>
