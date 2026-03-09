@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>粤剧数字人</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #f6f7f9;
+            font-family: "Microsoft YaHei", sans-serif;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: #c92d3a;
+            color: white;
+            padding: 24px;
+            text-align: center;
+        }
+        .content {
+            display: flex;
+            padding: 30px;
+            gap: 30px;
+        }
+
+        /* ========== 左侧：你的粤剧人物（100%原图） ========== */
+        .avatar-area {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        .character {
+            position: relative;
+            width: 380px;
+        }
+        .character img {
+            width: 100%;
+            display: block;
+            border-radius: 12px;
+        }
+
+        /* ========== 嘴巴：说话时动 ========== */
+        #mouth {
+            position: absolute;
+            bottom: 40.5%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 32px;
+            height: 10px;
+            background: #f15b6b;
+            border-radius: 0 0 50% 50%;
+            opacity: 0;
+            transition: 0.1s;
+        }
+        #mouth.speaking {
+            opacity: 1;
+            animation: mouthMove 0.2s infinite alternate;
+        }
+        @keyframes mouthMove {
+            0% { height: 8px; }
+            100% { height: 16px; }
+        }
+
+        /* ========== 右侧聊天 ========== */
+        .chat-box {
+            flex: 1;
+            background: #f8f9fa;
+            border-radius: 14px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 600px;
+        }
+        .chat-history {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 14px;
+        }
+        .msg {
+            padding: 10px 14px;
+            border-radius: 16px;
+            max-width: 80%;
+            margin-bottom: 10px;
+        }
+        .msg.user {
+            background: #c92d3a;
+            color: white;
+            margin-left: auto;
+        }
+        .msg.ai {
+            background: white;
+            color: #333;
+            margin-right: auto;
+        }
+        .input-bar {
+            display: flex;
+            gap: 8px;
+        }
+        #inputText {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #ddd;
+            border-radius: 24px;
+            outline: none;
+        }
+        #sendBtn {
+            padding: 12px 22px;
+            background: #c92d3a;
+            color: white;
+            border: none;
+            border-radius: 24px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>粤剧Q版数字人</h1>
+            <p>会说话、会动嘴、智能回答</p>
+        </div>
+
+        <div class="content">
+            <!-- 左侧：你的人物模型 -->
+            <div class="avatar-area">
+                <div class="character">
+                    <img src="yueju.png" alt="粤剧人物">
+                    <div id="mouth"></div>
+                </div>
+            </div>
+
+            <!-- 右侧聊天 -->
+            <div class="chat-box">
+                <div class="chat-history" id="history"></div>
+                <div class="input-bar">
+                    <input type="text" id="inputText" placeholder="问我：你会什么表演？">
+                    <button id="sendBtn">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// ==============================================
+// 语音说话 + 动嘴同步（浏览器原生语音）
+// ==============================================
+const synth = window.speechSynthesis;
+const mouth = document.getElementById('mouth');
+const history = document.getElementById('history');
+const inputText = document.getElementById('inputText');
+const sendBtn = document.getElementById('sendBtn');
+
+// 说话
+function speak(text) {
+    if (synth.speaking) synth.cancel();
+
+    mouth.classList.add('speaking');
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 0.95;
+    u.pitch = 1.1;
+    u.volume = 1;
+
+    u.onend = () => {
+        mouth.classList.remove('speaking');
+    };
+    synth.speak(u);
+}
+
+// 聊天消息
+function addMsg(text, isUser) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + (isUser ? 'user' : 'ai');
+    div.textContent = text;
+    history.appendChild(div);
+    history.scrollTop = history.scrollHeight;
+}
+
+// AI回答逻辑
+function aiReply(userMsg) {
+    addMsg(userMsg, true);
+    inputText.value = '';
+
+    let msg = '';
+    const t = userMsg.trim();
+
+    if (/表演|会什么表演/.test(t)) {
+        msg = '我会表演粤剧经典剧目，比如《帝女花》《牡丹亭》《昭君出塞》，还有水袖功、身段表演哦！';
+    } else if (/你好|嗨/.test(t)) {
+        msg = '你好呀～我是粤剧小旦，很高兴认识你！';
+    } else if (/粤剧/.test(t)) {
+        msg = '粤剧是广东非物质文化遗产，角色分为生、旦、净、末、丑，扮相和唱腔都非常优美！';
+    } else if (/谢谢/.test(t)) {
+        msg = '不用客气，随时可以来跟我聊天哦！';
+    } else {
+        msg = '我听懂啦，你可以问我：你会什么表演，我会表演给你看哦！';
+    }
+
+    addMsg(msg, false);
+    speak(msg);
+}
+
+// 发送
+function send() {
+    const t = inputText.value.trim();
+    if (t) aiReply(t);
+}
+
+sendBtn.onclick = send;
+inputText.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') send();
+});
+
+// 欢迎语
+window.onload = () => {
+    const welcome = '你好呀！我是粤剧数字人，你可以问我会什么表演哦！';
+    addMsg(welcome, false);
+    speak(welcome);
+};
+</script>
+</body>
+</html>
+
+
